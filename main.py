@@ -2,6 +2,9 @@ import tkinter as tk
 from tkinter import ttk
 from search import search_places
 import googlemaps
+import requests
+from io import BytesIO
+from PIL import Image, ImageTk
 import webbrowser
 
 API_KEY = 'AIzaSyCJxyreN2bQmxOgYTLL-BqcAVXNnA714jY'
@@ -32,19 +35,11 @@ def search():
     total_pages = (len(results) - 1) // display_count + 1
     show_results()
 
-def show_map(location):
-    results = search_places(location)
-    if len(results) == 0:
-        print('No results found.')
-        return
-    # 取得第一個搜尋結果的地點
-    location = results[0]['location']
-    # 組合 Google Maps API 的查詢字串
-    query = f"https://www.google.com/maps/search/?api=1&query={location['lat']},{location['lng']}"
-    # 開啟瀏覽器顯示地圖
-    webbrowser.open(query)
+import io
+import tkinter as tk
+from PIL import ImageTk, Image
 
-def open_result_info():
+def show_map():
     selection = tree.selection()
     if selection:
         item = tree.item(selection[0])
@@ -52,9 +47,61 @@ def open_result_info():
         for result in results:
             if result['name'] == name:
                 place_id = result['place_id']
-                webbrowser.open(f"https://www.google.com.tw/maps/place/?q=place_id:{place_id}")
+                place = gmaps.place(place_id, language='zh-TW', fields=['name', 'formatted_address', 'rating', 'photo'])['result']
+                name = place['name']
+                address = place['formatted_address']
+                rating = place.get('rating', None)
+                photo_reference = place.get('photos', [])[0].get('photo_reference', None)
+                photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={photo_reference}&key={API_KEY}" if photo_reference is not None else None
+                
+                # 產生 Google Maps 的查詢網址
+                query = f"https://www.google.com/maps/search/?api=1&query={address}&query_place_id={place_id}"
+                webbrowser.open(query)
+                
+                # 顯示餐廳照片和資訊
+                if photo_url is not None:
+                    # 讀取照片
+                    response = requests.get(photo_url)
+                    img = Image.open(io.BytesIO(response.content))
+                    
+                    # 建立小視窗
+                    window = tk.Toplevel()
+                    window.title(name)
+                    
+                    # 顯示照片
+                    img_tk = ImageTk.PhotoImage(img)
+                    label_photo = tk.Label(window, image=img_tk)
+                    label_photo.pack()
+                    
+                    # 創建工具列
+                    toolbar = tk.Frame(window, bg='white', height=40)
+                    toolbar.pack(side=tk.TOP, fill=tk.X)
+                    back_button = tk.Button(toolbar, text='返回', command=window.destroy)
+                    back_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+                    # 顯示餐廳資訊
+                    frame_info = tk.Frame(window)
+                    frame_info.pack(pady=10)
+                    
+                    label_name = tk.Label(frame_info, text=name, font=('Arial', 16, 'bold'))
+                    label_name.grid(row=0, column=0, columnspan=2, sticky='w')
+                    
+                    label_address_title = tk.Label(frame_info, text='地址：', font=('Arial', 12))
+                    label_address_title.grid(row=1, column=0, sticky='e')
+                    label_address_value = tk.Label(frame_info, text=address, font=('Arial', 12))
+                    label_address_value.grid(row=1, column=1, sticky='w')
+                    
+                    label_rating_title = tk.Label(frame_info, text='評分：', font=('Arial', 12))
+                    label_rating_title.grid(row=2, column=0, sticky='e')
+                    label_rating_value = tk.Label(frame_info, text=rating, font=('Arial', 12))
+                    label_rating_value.grid(row=2, column=1, sticky='w')
+                    
+                    window.mainloop()
                 break
-#上下頁
+    else:
+        print("請選擇店家")
+
+
 def next_page():
     global page, start
     if page < total_pages - 1:
@@ -69,7 +116,6 @@ def prev_page():
         start -= display_count
         show_results()
 
-#建立主視窗
 window = tk.Tk()
 window.geometry("1000x800")
 window.title("餐廳搜尋系統")
@@ -117,10 +163,10 @@ pages_label = ttk.Label(window, text="")
 pages_label.pack(pady=10)
 
 location_entry = tk.Entry(window)
-location_entry.pack(side=tk.LEFT)
+location_entry.pack(anchor=tk.CENTER, pady=20)
 
-map_button = tk.Button(window, text="打開地圖查看", command=lambda: show_map(location_entry.get()))
-map_button.pack(side=tk.RIGHT)
+map_button = tk.Button(window, text="打開地圖查看", command=lambda: show_map())
+map_button.pack(anchor=tk.CENTER)
 
 prev_button = ttk.Button(window, text="上一頁", command=prev_page)
 prev_button.pack(side=tk.LEFT, padx=10)
