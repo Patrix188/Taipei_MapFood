@@ -1,135 +1,162 @@
 import tkinter as tk
 from tkinter import ttk
+from search import search_places
 import googlemaps
 import webbrowser
-from search import search_places
+import folium
 
-# Google Maps API Key
 API_KEY = 'AIzaSyCJxyreN2bQmxOgYTLL-BqcAVXNnA714jY'
-
-display_count = 10
-
-# Create Google Maps client
 gmaps = googlemaps.Client(key=API_KEY)
 
-# Global variables
-results = []
-current_page = 0
-total_pages = 0
+# 每頁呈現的結果數量
+display_count:int = 5
+popup_menu = None
 
-def search():
-    global results, current_page, total_pages
-    
-    # Clear previous search results
-    tree.delete(*tree.get_children())
-    pages_label.configure(text="")
-    map_label.configure(text="圖片參考")
-    
-    # Get search area and rating from user inputs
-    area = entry.get().strip()
-    rating = None
-    if rating_combobox.get() != "不限評分":
-        rating = float(rating_combobox.get())
-    
-    # Call search_places function from search.py to search for restaurants
-    results = search_places(area, rating)
-    total_pages = (len(results) - 1) // 10 + 1
-    current_page = 0
-    
-    # Show search results on the treeview
-    show_results()
 
 def show_results():
-    global current_page
+    global start, page, total_pages
     
-    # Calculate start and end index for current page
-    start_index = current_page * 10
-    end_index = start_index + 10
+    tree.delete(*tree.get_children())
+    for i in range(start, start + display_count):
+        if i >= len(results):
+            break
+        result = results[i]
+        tree.insert("", tk.END, values=(result['name'], result['address'], result['rating']))
     
-    # Show current page number and total pages
-    pages_label.configure(text=f"第{current_page + 1}頁，共{total_pages}頁")
+    pages_label.config(text=f"第 {page+1} 頁 / 共 {total_pages} 頁")
+
+def search():
+    global results, start, page, total_pages
     
-    # Show search results on the treeview
-    for result in results[start_index:end_index]:
-        tree.insert("", "end", values=(result['name'], result['address'], result.get('rating', "-")))
-    
-def prev_page():
-    global current_page
-    
-    # Do nothing if already on first page
-    if current_page == 0:
-        return
-    
-    # Move to previous page and show results
-    current_page -= 1
+    area = entry.get()
+    results = search_places(area)
+    start = 0
+    page = 0
+    total_pages = (len(results) - 1) // display_count + 1
     show_results()
+
+def show_map(places):
+    # 取得地圖中心點
+    lat_sum = 0
+    lng_sum = 0
+    for place in places:
+        lat_sum += place["lat"]
+        lng_sum += place["lng"]
+    center_lat = lat_sum / len(places)
+    center_lng = lng_sum / len(places)
+
+    # 建立地圖
+    m = folium.Map(location=[center_lat, center_lng], zoom_start=15)
+
+    # 在地圖上標註每個地點
+    for i, place in enumerate(places):
+        # 取得店家資訊
+        name = place["name"]
+        address = place["address"]
+        rating = place["rating"]
+        url = place["url"]
+
+        # 取得店家位置
+        lat = place["lat"]
+        lng = place["lng"]
+
+        # 建立標註
+        tooltip = f"{i+1}. {name}"
+        popup_html = f"""
+            <strong>{name}</strong><br>
+            {address}<br>
+            Rating: {rating}<br>
+            <a href="{url}" target="_blank">More info</a>
+        """
+        popup = folium.Popup(html=popup_html, max_width=500)
+        folium.Marker(location=[lat, lng], tooltip=tooltip, popup=popup).add_to(m)
+
+    # 顯示地圖
+    m.save("map.html")
+    webbrowser.open("map.html")
+
+
+def open_result_info(event):
+    selection = tree.selection()
+    if selection:
+        item = tree.item(selection[0])
+        name = item['values'][0]
+        for i, result in enumerate(results):
+            if result['name'] == name:
+                place_id = result['place_id']
+                tree.selection_set(selection[0])
+                popup_menu.tk_popup(event.x_root, event.y_root)
+                # 取得店家詳細資訊
+                place_detail = gmaps.place(place_id)['result']
+                # 在控制台上顯示詳細資訊
+                print(place_detail)
+                break
+
 
 def next_page():
-    global current_page
-    
-    # Do nothing if already on last page
-    if current_page == total_pages - 1:
-        return
-    
-    # Move to next page and show results
-    current_page += 1
-    show_results()
+    global page, start
+    if page < total_pages - 1:
+        page += 1
+        start += display_count
+        show_results()
 
-def show_map(location):
-    if location == "":
-        return
-    
-    # Show map on Google Maps website
-    url = f"https://www.google.com/maps/search/?api=1&query={location}"
-    webbrowser.open_new_tab(url)
+def prev_page():
+    global page, start
+    if page > 0:
+        page -= 1
+        start -= display_count
+        show_results()
 
-# Create main window
+# 創建主視窗
 window = tk.Tk()
-window.geometry("1000x800")
-window.title("餐廳搜尋系統")
+window.title("地圖搜尋")
+window.geometry("800x600")
 
-# Create and configure styles for widgets
-style = ttk.Style(window)
-style.theme_use("clam")
-style.configure(".", font=("Helvetica", 12))
-style.configure("TLabel", foreground="black", background="white")
-style.configure("TButton", foreground="white", background="#0078d7")
-style.map("TButton", background=[("active", "#0065a0")])
-search_label = ttk.Label(window, text="請輸入地區：")
-search_label.pack(pady=(30, 10))
-entry = ttk.Entry(window, width=40)
-entry.pack()
-entry.focus()
+#創建標籤框架
+search_frame = ttk.LabelFrame(window, text="搜尋區域")
+search_frame.pack(fill="both", expand="yes", padx=20, pady=20)
 
-rating_label = ttk.Label(window, text="評分：")
-rating_label.pack(pady=(10, 0))
-rating_combobox = ttk.Combobox(window, width=10, values=["不限評分", "3.0", "3.5", "4.0", "4.5", "5.0"])
-rating_combobox.current(0)
-rating_combobox.pack()
+#創建搜尋輸入框
+entry = ttk.Entry(search_frame, width=30)
+entry.pack(side="left", padx=5, pady=5)
 
-search_button = ttk.Button(window, text="搜尋", command=search)
-search_button.pack(pady=(20, 10))
+#創建搜尋按鈕
+search_button = ttk.Button(search_frame, text="搜尋", command=search)
+search_button.pack(side="left", padx=5, pady=5)
 
-pages_label = ttk.Label(window, text="")
-pages_label.pack()
+#創建結果框架
+results_frame = ttk.Frame(window)
+results_frame.pack(fill="both", expand="yes", padx=20, pady=20)
 
-tree = ttk.Treeview(window, columns=("name", "address", "rating"), show="headings")
-tree.heading("name", text="餐廳名稱")
-tree.heading("address", text="地址")
-tree.heading("rating", text="評分")
-tree.column("name", width=200, anchor="center")
-tree.column("address", width=400, anchor="w")
-tree.column("rating", width=100, anchor="center")
-tree.pack(padx=20, pady=20)
+#創建標題列
+columns = ("名稱", "地址", "評分")
+tree = ttk.Treeview(results_frame, show="headings", columns=columns)
+for col in columns:
+    tree.column(col, width=200)
+    tree.heading(col, text=col)
+    tree.pack(side="left", fill="y")
 
-prev_button = ttk.Button(window, text="上一頁", command=prev_page)
-prev_button.pack(side="left", padx=(20, 10))
+#創建捲軸條
+scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=tree.yview)
+scrollbar.pack(side="right", fill="y")
+tree.configure(yscrollcommand=scrollbar.set)
 
-next_button = ttk.Button(window, text="下一頁", command=next_page)
-next_button.pack(side="left")
+#創建分頁按鈕
+paging_frame = ttk.Frame(window)
+paging_frame.pack(pady=20)
+prev_button = ttk.Button(paging_frame, text="<< 上一頁", command=prev_page)
+prev_button.pack(side="left", padx=5)
+next_button = ttk.Button(paging_frame, text="下一頁 >>", command=next_page)
+next_button.pack(side="left", padx=5)
+pages_label = ttk.Label(paging_frame, text="")
+pages_label.pack(side="left", padx=5)
 
-map_label = ttk.Label(window, text="圖片參考")
-map_label.pack(pady=(20, 0))
+#創建彈出選單
+popup_menu = tk.Menu(tree, tearoff=0)
+popup_menu.add_command(label="開啟地圖", command=lambda: show_map(entry.get()))
 
-if __name__ == '__main__':
-    window.mainloop()
+#綁定右鍵事件
+tree.bind("<Button-3>", open_result_info)
+
+#執行主迴圈
+window.mainloop()
