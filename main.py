@@ -67,17 +67,43 @@ def show_map():
                     # 建立小視窗
                     window = tk.Toplevel()
                     window.title(name)
+
+                    # 創建主選單
+                    menubar = tk.Menu(window)
+                    window.config(menu=menubar)
+
+                    # 創建操作選單
+                    operations_menu = tk.Menu(menubar, tearoff=0)
+                    menubar.add_cascade(label='操作', menu=operations_menu)
+
+                    # 新增加入口袋名單的選項
+                    def add_to_pocket():
+                        print('加入口袋名單')
+
+                    operations_menu.add_command(label='加入口袋名單', command=add_to_pocket)
+
+                    # 新增返回選項
+                    def go_back():
+                        print('返回')
+
+                    operations_menu.add_command(label='返回', command=go_back)
+
+                    # 創建一個空的frame來演示工具列
+                    toolbar = tk.Frame(window, bg='white', height=40)
+                    toolbar.pack(side=tk.TOP, fill=tk.X)
+
+                    # 在frame上新增一個菜單按鈕
+                    menu_button = tk.Menubutton(toolbar, text='操作', relief='raised', direction='below')
+                    menu_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+                    # 設置菜單按鈕的選單為操作選單
+                    menu_button.config(menu=operations_menu)
                     
                     # 顯示照片
                     img_tk = ImageTk.PhotoImage(img)
                     label_photo = tk.Label(window, image=img_tk)
                     label_photo.pack()
-                    
-                    # 創建工具列
-                    toolbar = tk.Frame(window, bg='white', height=40)
-                    toolbar.pack(side=tk.TOP, fill=tk.X)
-                    back_button = tk.Button(toolbar, text='返回', command=window.destroy)
-                    back_button.pack(side=tk.LEFT, padx=5, pady=5)
+                
 
                     # 顯示餐廳資訊
                     frame_info = tk.Frame(window)
