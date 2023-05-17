@@ -3,6 +3,8 @@
 - 組員: 冠亨, 家成, 興耀
 - 指導老師: 徐國堂 (Github: Robertsu2003)
 
+![美食地圖豬](./food03.png)
+
 僅供python應用實戰班隊學術研究使用。
 
 成果發表影片連結：https://youtu.be/ng_u9c8iAl4
